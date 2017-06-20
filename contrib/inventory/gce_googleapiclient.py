@@ -158,16 +158,14 @@ def main(args):
     zone = args['--zone']
     api_version = args['--api-version']
 
-    projects = get_all_projects()
-
     instances = []
-    for project in projects:
+    for project in get_all_projects():
         for zone in get_all_zones_in_project(project):
             for instance in get_instances(project_id=project,
                               zone=zone,
                               api_version=api_version):
                 instances.append(instance)
-                
+
     inventory_json = get_inventory(instances)
     print(json.dumps(inventory_json,
                      sort_keys=True,
