@@ -33,6 +33,7 @@ Usage:
     {script_name} [options]
 
 Options:
+    --account ACCOUNT_NAME --account=ACCOUNT    Account billing name
     -a API_VERSION --api-version=API_VERSION    The API version used to connect to GCE [default: v1]
     -c CONFIG_FILE --config=CONFIG_FILE         Path to the config file (see docoptcfg docs) [default: ./gce_googleapiclient.ini]
     -l --list                                   List all hosts (needed by Ansible, but actually doesn't do anything)
@@ -44,25 +45,28 @@ All the parameters can also be set as environment variables using the 'GCE_' pre
 
 
 
-def get_all_projects(api_version='v1'):
+def get_all_billing_projects(account_billing_name, api_version='v1'):
     project_ids = []
 
     credentials = GoogleCredentials.get_application_default()
 
-    service = discovery.build('cloudresourcemanager', api_version,
+    service = discovery.build('cloudbilling', 
+                              version=api_version,
                               credentials=credentials)
     # pylint: disable=no-member
-    request = service.projects().list()
+    request = service.billingAccounts().projects().list(name=account_billing_name)
 
     while request is not None:
         response = request.execute()
 
-        for project in response['projects']:
-            project_ids.append(project['projectId'])
-
         # pylint: disable=no-member
-        request = service.projects().list_next(previous_request=request,
-                                               previous_response=response)
+        request = service.billingAccounts().projects().list_next(previous_request=request,
+                                                                 previous_response=response)
+
+        for projectBillingInfo in response['projectBillingInfo']:
+            if projectBillingInfo['billingEnabled']:
+                project_ids.append(projectBillingInfo['projectId'])
+
     return project_ids
 
 def get_all_zones_in_project(project, api_version='v1'):
@@ -155,11 +159,12 @@ def get_inventory(instances):
 
 def main(args):
     project = args['--project']
-    zone = args['--zone']
+    zone = args['--zone']   
     api_version = args['--api-version']
+    account_billing_name = args['--account']
 
     instances = []
-    for project in get_all_projects():
+    for project in get_all_billing_projects(account_billing_name):
         for zone in get_all_zones_in_project(project):
             for instance in get_instances(project_id=project,
                               zone=zone,
