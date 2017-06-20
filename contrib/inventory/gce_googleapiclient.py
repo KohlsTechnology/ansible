@@ -43,6 +43,7 @@ All the parameters can also be set as environment variables using the 'GCE_' pre
 """.format(script_name=basename(argv[0]), envvar_prefix=ENV_PREFIX)
 
 
+
 def get_all_projects(api_version='v1'):
     project_ids = []
 
@@ -62,8 +63,25 @@ def get_all_projects(api_version='v1'):
         # pylint: disable=no-member
         request = service.projects().list_next(previous_request=request,
                                                previous_response=response)
-
     return project_ids
+
+def get_all_zones_in_project(project, api_version='v1'):
+    zones = []
+
+    credentials = GoogleCredentials.get_application_default()
+    service = discovery.build('compute', api_version, credentials=credentials)
+
+    request = service.zones().list(project=project)
+    while request is not None:
+        response = request.execute()
+
+        for zone in response['items']:
+            # TODO: Change code below to process each `zone` resource:
+            zones.append(zone['name'])
+
+        request = service.zones().list_next(previous_request=request, previous_response=response)
+
+    return zones
 
 
 def get_instances(project_id, zone, api_version='v1'):
@@ -76,7 +94,10 @@ def get_instances(project_id, zone, api_version='v1'):
     request = service.instances().list(project=project_id, zone=zone)
 
     while request is not None:
-        response = request.execute()
+        try:
+            response = request.execute()
+        except:
+            break
 
         if 'items' in response:
             for instance in response['items']:
@@ -137,10 +158,16 @@ def main(args):
     zone = args['--zone']
     api_version = args['--api-version']
 
-    instances = get_instances(project_id=project,
-                              zone=zone,
-                              api_version=api_version)
+    projects = get_all_projects()
 
+    instances = []
+    for project in projects:
+        for zone in get_all_zones_in_project(project):
+            for instance in get_instances(project_id=project,
+                              zone=zone,
+                              api_version=api_version):
+                instances.append(instance)
+                
     inventory_json = get_inventory(instances)
     print(json.dumps(inventory_json,
                      sort_keys=True,
