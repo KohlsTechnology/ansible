@@ -4,7 +4,7 @@
 from __future__ import print_function
 
 from os.path import basename
-from sys import argv
+from sys import argv,exit
 
 import collections
 import logging as log
@@ -15,6 +15,7 @@ from docoptcfg import DocoptcfgFileError
 
 from googleapiclient import discovery
 from oauth2client.client import GoogleCredentials
+from googleapiclient.errors import HttpError
 
 ENV_PREFIX = 'GCE_'
 
@@ -65,7 +66,7 @@ def get_all_billing_projects(billing_account_name, api_version='v1'):
 
         for projectbillinginfo in response['projectBillingInfo']:
             if projectbillinginfo['billingEnabled']:
-                project_ids.append(projectBillingInfo['projectId'])
+                project_ids.append(projectbillinginfo['projectId'])
 
     return project_ids
 
@@ -163,13 +164,29 @@ def main(args):
     api_version = args['--api-version']
     billing_account_name = args['--account']
 
+    projects_list = []
+    zones_list = []
     instances = []
-    for project in get_all_billing_projects(billing_account_name):
-        for zone in get_all_zones_in_project(project):
-            for instance in get_instances(project_id=project,
-                              zone=zone,
-                              api_version=api_version):
-                instances.append(instance)
+
+    if project:
+        projects_list.append(project)
+    else:
+        projects_list = get_all_billing_projects(billing_account_name)
+
+    for project in projects_list:
+        try:
+            if zone:
+                zones_list.append(zone)
+            else:
+                zones_list = get_all_zones_in_project(project)
+
+            for zone in zones_list:
+                for instance in get_instances(project_id=project,
+                                  zone=zone,
+                                  api_version=api_version):
+                    instances.append(instance)
+        except HttpError:
+            continue
 
     inventory_json = get_inventory(instances)
     print(json.dumps(inventory_json,
@@ -189,7 +206,7 @@ if __name__ == "__main__":
         ARGS = docoptcfg(DOCOPT_USAGE, env_prefix=ENV_PREFIX)
 
     log.debug(ARGS)
-    if None in ARGS.values():
+    if not ARGS['--account']:
         print(DOCOPT_USAGE)
         exit(1)
 
