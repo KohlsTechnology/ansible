@@ -33,19 +33,19 @@ Usage:
     {script_name} [options]
 
 Options:
-    --account ACCOUNT_NAME --account=ACCOUNT    Account billing name
-    -a API_VERSION --api-version=API_VERSION    The API version used to connect to GCE [default: v1]
-    -c CONFIG_FILE --config=CONFIG_FILE         Path to the config file (see docoptcfg docs) [default: ./gce_googleapiclient.ini]
-    -l --list                                   List all hosts (needed by Ansible, but actually doesn't do anything)
-    -p PROJECT --project=PROJECT                The GCE project where you want to get the inventory
-    -z ZONE --zone=ZONE                         The GCE zone where you ant to get the inventory
+    --account ACCOUNT_NAME --account=ACCOUNT_NAME  Account billing name
+    -a API_VERSION --api-version=API_VERSION       The API version used to connect to GCE [default: v1]
+    -c CONFIG_FILE --config=CONFIG_FILE            Path to the config file (see docoptcfg docs) [default: ./gce_googleapiclient.ini]
+    -l --list                                      List all hosts (needed by Ansible, but actually doesn't do anything)
+    -p PROJECT --project=PROJECT                   The GCE project where you want to get the inventory
+    -z ZONE --zone=ZONE                            The GCE zone where you ant to get the inventory
 
 All the parameters can also be set as environment variables using the 'GCE_' prefix (i.e. {envvar_prefix}API_VERSION=beta).
 """.format(script_name=basename(argv[0]), envvar_prefix=ENV_PREFIX)
 
 
 
-def get_all_billing_projects(account_billing_name, api_version='v1'):
+def get_all_billing_projects(billing_account_name, api_version='v1'):
     project_ids = []
 
     credentials = GoogleCredentials.get_application_default()
@@ -54,7 +54,7 @@ def get_all_billing_projects(account_billing_name, api_version='v1'):
                               version=api_version,
                               credentials=credentials)
     # pylint: disable=no-member
-    request = service.billingAccounts().projects().list(name=account_billing_name)
+    request = service.billingAccounts().projects().list(name=billing_account_name)
 
     while request is not None:
         response = request.execute()
@@ -63,8 +63,8 @@ def get_all_billing_projects(account_billing_name, api_version='v1'):
         request = service.billingAccounts().projects().list_next(previous_request=request,
                                                                  previous_response=response)
 
-        for projectBillingInfo in response['projectBillingInfo']:
-            if projectBillingInfo['billingEnabled']:
+        for projectbillinginfo in response['projectBillingInfo']:
+            if projectbillinginfo['billingEnabled']:
                 project_ids.append(projectBillingInfo['projectId'])
 
     return project_ids
@@ -159,12 +159,12 @@ def get_inventory(instances):
 
 def main(args):
     project = args['--project']
-    zone = args['--zone']   
+    zone = args['--zone']
     api_version = args['--api-version']
-    account_billing_name = args['--account']
+    billing_account_name = args['--account']
 
     instances = []
-    for project in get_all_billing_projects(account_billing_name):
+    for project in get_all_billing_projects(billing_account_name):
         for zone in get_all_zones_in_project(project):
             for instance in get_instances(project_id=project,
                               zone=zone,
