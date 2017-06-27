@@ -33,7 +33,7 @@ Usage:
     {script_name} [options]
 
 Options:
-    --account ACCOUNT_NAME --account=ACCOUNT_NAME  Account billing name
+    --account ACCOUNT_NAME --account=ACCOUNT_NAME  Billing account name
     -a API_VERSION --api-version=API_VERSION       The API version used to connect to GCE [default: v1]
     -c CONFIG_FILE --config=CONFIG_FILE            Path to the config file (see docoptcfg docs) [default: ./gce_googleapiclient.ini]
     -l --list                                      List all hosts (needed by Ansible, but actually doesn't do anything)
