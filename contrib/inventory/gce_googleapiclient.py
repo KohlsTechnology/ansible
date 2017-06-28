@@ -108,7 +108,8 @@ def get_instances(project_id, zone, api_version='v1'):
     while request is not None:
         try:
             response = request.execute()
-        except HttpError:
+        except HttpError as asx:
+            log.info('Problem with retrieving instance: %s', str(exc))
             break
 
         if 'items' in response:
