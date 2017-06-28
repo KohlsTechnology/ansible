@@ -33,8 +33,9 @@ Before using:
 $ pip install google-api-python-client docoptcfg
 
 Usage:
-    {script_name} (--project=PROJECT... | --all-projects --billing-account=ACCOUNT_NAME | --project --billing-account=ACCOUNT_NAME)
-                  (--zone=ZONE...|--all-zones)
+    {script_name} (--billing-account=ACCOUNT_NAME --all-projects | --billing-account=ACCOUNT_NAME | --project=PROJECT...)
+                  [--project=PROJECT...]
+                  [--zone=ZONE...|--all-zones]
                   [options]
 
 
@@ -104,8 +105,6 @@ def get_instances(project_id, zone, api_version='v1'):
     service = discovery.build('compute', api_version, credentials=credentials)
     # pylint: disable=no-member
     request = service.instances().list(project=project_id, zone=zone)
-    #TODO
-    print('project {}, zone {}'.format(project_id,zone))
     while request is not None:
         try:
             response = request.execute()
