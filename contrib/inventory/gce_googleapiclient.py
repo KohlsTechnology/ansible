@@ -33,17 +33,19 @@ Before using:
 $ pip install google-api-python-client docoptcfg
 
 Usage:
-    {script_name} (--project=PROJECT...|--all-projects --account=ACCOUNT_NAME)
+    {script_name} (--project=PROJECT...|--all-projects --all-zones --billing-account=ACCOUNT_NAME)
                   [options]
 
 
 Options:
-    --account ACCOUNT_NAME --account=ACCOUNT_NAME  Billing account name
-    -a API_VERSION --api-version=API_VERSION       The API version used to connect to GCE [default: v1]
-    -c CONFIG_FILE --config=CONFIG_FILE            Path to the config file (see docoptcfg docs) [default: ./gce_googleapiclient.ini]
-    -l --list                                      List all hosts (needed by Ansible, but actually doesn't do anything)
-    -p PROJECT --project=PROJECT                   The GCE project where you want to get the inventory
-    -z ZONE --zone=ZONE                            The GCE zone where you ant to get the inventory
+    --billing-account ACCOUNT_NAME --billing-account=ACCOUNT_NAME  Billing account name
+    --all-projects                                                 Looks for every avail project for billing account
+    --all-zones                                                    Looks for each zone
+    -a API_VERSION --api-version=API_VERSION                       The API version used to connect to GCE [default: v1]
+    -c CONFIG_FILE --config=CONFIG_FILE                            Path to the config file (see docoptcfg docs) [default: ./gce_googleapiclient.ini]
+    -l --list                                                      List all hosts (needed by Ansible, but actually doesn't do anything)
+    -p PROJECT --project=PROJECT                                   The GCE project where you want to get the inventory
+    -z ZONE --zone=ZONE                                            The GCE zone where you ant to get the inventory
 
 All the parameters can also be set as environment variables
 using the 'GCE_' prefix (i.e. {envvar_prefix}API_VERSION=beta).
@@ -87,7 +89,7 @@ def get_all_zones_in_project(project, api_version='v1'):
         response = request.execute()
 
         for zone in response['items']:
-            # TODO: Change code below to process each `zone` resource:
+            print('get_all_zones_in_project, project: {}, zone: {}'.format(project,zone['name']))
             zones.append(zone['name'])
 
         request = service.zones().list_next(
@@ -98,7 +100,7 @@ def get_all_zones_in_project(project, api_version='v1'):
 
 def get_instances(project_id, zone, api_version='v1'):
     instances = []
-
+    print('get_instances(), project:{}, zone: {}'.format(project_id,zone))
     credentials = GoogleCredentials.get_application_default()
 
     service = discovery.build('compute', api_version, credentials=credentials)
@@ -169,30 +171,36 @@ def get_inventory(instances):
 
 def main(args):
     project = args['--project']
-    all_projects = args['--all-project']
+    all_projects = args['--all-projects']
     zone = args['--zone']
     api_version = args['--api-version']
-    billing_account_name = args['--account']
+    billing_account_name = args['--billing-account']
 
     projects_list = []
     zones_list = []
     instances = []
 
     if project:
-        projects_list.append(project)
+        if type(project) is list:
+            projects_list = [project_name for project_name in project]
+        else:
+            projects_list.append(project)
     elif all_projects and billing_account_name:
         projects_list = get_all_billing_projects(billing_account_name)
 
     for project in projects_list:
         try:
             if zone:
-                zones_list.append(zone)
+                if type(zone) is list:
+                    zones_list = [zone_name for zone_name in zone]
+                else:
+                    zones_list.append(zone)
             else:
                 zones_list = get_all_zones_in_project(project)
 
-            for zone in zones_list:
+            for zone_name in zones_list:
                 for instance in get_instances(project_id=project,
-                                              zone=zone,
+                                              zone=zone_name,
                                               api_version=api_version):
                     instances.append(instance)
         except HttpError:
@@ -217,7 +225,9 @@ if __name__ == "__main__":
         ARGS = docoptcfg(DOCOPT_USAGE, env_prefix=ENV_PREFIX)
 
     log.debug(ARGS)
-    if ARGS.values() is None:
+    print(ARGS)
+    if not ARGS.values():
+        print('.')
         print(DOCOPT_USAGE)
         exit(1)
 
