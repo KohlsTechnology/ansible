@@ -89,7 +89,6 @@ def get_all_zones_in_project(project, api_version='v1'):
         response = request.execute()
 
         for zone in response['items']:
-            print('get_all_zones_in_project, project: {}, zone: {}'.format(project,zone['name']))
             zones.append(zone['name'])
 
         request = service.zones().list_next(
@@ -100,7 +99,6 @@ def get_all_zones_in_project(project, api_version='v1'):
 
 def get_instances(project_id, zone, api_version='v1'):
     instances = []
-    print('get_instances(), project:{}, zone: {}'.format(project_id,zone))
     credentials = GoogleCredentials.get_application_default()
 
     service = discovery.build('compute', api_version, credentials=credentials)
