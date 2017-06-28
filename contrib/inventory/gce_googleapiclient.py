@@ -33,21 +33,22 @@ Before using:
 $ pip install google-api-python-client docoptcfg
 
 Usage:
-    {script_name} (--billing-account=ACCOUNT_NAME --all-projects | --billing-account=ACCOUNT_NAME | --project=PROJECT...)
-                  [--project=PROJECT...]
+    {script_name} ([--all-projects | --project=PROJECT...])
+                  [--billing-account=ACCOUNT_NAME]
                   [--zone=ZONE...|--all-zones]
                   [options]
 
 
 Options:
     --billing-account ACCOUNT_NAME --billing-account=ACCOUNT_NAME  Billing account name
-    --all-projects                                                 Looks for every avail project for billing account
-    --all-zones                                                    Looks for each zone
+    --all-projects                                                 Looks for every avail project for billing account [default: True]
+    --all-zones                                                    Looks for each zone [default: True]
     -a API_VERSION --api-version=API_VERSION                       The API version used to connect to GCE [default: v1]
     -c CONFIG_FILE --config=CONFIG_FILE                            Path to the config file (see docoptcfg docs) [default: ./gce_googleapiclient.ini]
     -l --list                                                      List all hosts (needed by Ansible, but actually doesn't do anything)
     -p PROJECT --project=PROJECT                                   The GCE project where you want to get the inventory
     -z ZONE --zone=ZONE                                            The GCE zone where you ant to get the inventory
+    -h --help                                                      This message.
 
 All the parameters can also be set as environment variables
 using the 'GCE_' prefix (i.e. {envvar_prefix}API_VERSION=beta).
@@ -180,7 +181,7 @@ def main(args):
 
     if project:
         projects_list = [project_name for project_name in project]
-    elif all_projects and billing_account_name:
+    elif all_projects or billing_account_name:
         projects_list = get_all_billing_projects(billing_account_name)
 
     for project in projects_list:
@@ -217,9 +218,9 @@ if __name__ == "__main__":
         log.info('Failed reading: %s', str(exc))
         ARGS = docoptcfg(DOCOPT_USAGE, env_prefix=ENV_PREFIX)
 
-    log.debug(ARGS)
-    if not ARGS.values():
+    try:
+        if argv[1]:
+            main(ARGS)
+    except IndexError:
         print(DOCOPT_USAGE)
         exit(1)
-
-    main(ARGS)
