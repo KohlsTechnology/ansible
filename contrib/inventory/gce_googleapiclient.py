@@ -223,9 +223,7 @@ if __name__ == "__main__":
         ARGS = docoptcfg(DOCOPT_USAGE, env_prefix=ENV_PREFIX)
 
     log.debug(ARGS)
-    print(ARGS)
     if not ARGS.values():
-        print('.')
         print(DOCOPT_USAGE)
         exit(1)
 
