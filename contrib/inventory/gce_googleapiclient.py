@@ -33,7 +33,8 @@ Before using:
 $ pip install google-api-python-client docoptcfg
 
 Usage:
-    {script_name} (--project=PROJECT...|--all-projects --all-zones --billing-account=ACCOUNT_NAME)
+    {script_name} (--project=PROJECT... | --all-projects --billing-account=ACCOUNT_NAME | --project --billing-account=ACCOUNT_NAME)
+                  (--zone=ZONE...|--all-zones)
                   [options]
 
 
@@ -91,8 +92,8 @@ def get_all_zones_in_project(project, api_version='v1'):
         for zone in response['items']:
             zones.append(zone['name'])
 
-        request = service.zones().list_next(
-            previous_request=request, previous_response=response)
+        request = service.zones().list_next(previous_request=request,
+                                            previous_response=response)
 
     return zones
 
@@ -100,11 +101,11 @@ def get_all_zones_in_project(project, api_version='v1'):
 def get_instances(project_id, zone, api_version='v1'):
     instances = []
     credentials = GoogleCredentials.get_application_default()
-
     service = discovery.build('compute', api_version, credentials=credentials)
     # pylint: disable=no-member
     request = service.instances().list(project=project_id, zone=zone)
-
+    #TODO
+    print('project {}, zone {}'.format(project_id,zone))
     while request is not None:
         try:
             response = request.execute()
@@ -179,20 +180,14 @@ def main(args):
     instances = []
 
     if project:
-        if type(project) is list:
-            projects_list = [project_name for project_name in project]
-        else:
-            projects_list.append(project)
+        projects_list = [project_name for project_name in project]
     elif all_projects and billing_account_name:
         projects_list = get_all_billing_projects(billing_account_name)
 
     for project in projects_list:
         try:
             if zone:
-                if type(zone) is list:
-                    zones_list = [zone_name for zone_name in zone]
-                else:
-                    zones_list.append(zone)
+                zones_list = [zone_name for zone_name in zone]
             else:
                 zones_list = get_all_zones_in_project(project)
 
@@ -201,7 +196,8 @@ def main(args):
                                               zone=zone_name,
                                               api_version=api_version):
                     instances.append(instance)
-        except HttpError:
+        except HttpError as exc:
+            log.info('Problem with retrieving zones: %s', str(exc))
             continue
 
     inventory_json = get_inventory(instances)
