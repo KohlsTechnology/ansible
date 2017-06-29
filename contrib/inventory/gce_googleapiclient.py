@@ -206,31 +206,36 @@ def main(args):
         zones_list = [zone_name for zone_name in zone]
 
     for project in projects_list:
-        try:
-            if not zone:
+        if not zones_list:
+            threads_zones = []
+            for num in range(MAX_ZONES_THREADS):
+                thread = Thread(target=get_all_zones_in_project,
+                                name="ThreadZones_" + str(num),
+                                args=(project, queue_zones),
+                                )
+                threads_zones.append(thread)
+                thread.start()
 
-                for num in range(MAX_ZONES_THREADS):
-                    thread = Thread(target=get_all_zones_in_project,
-                                    name="ThreadZones_" + str(num),
-                                    args=(project, queue_zones),
-                                    )
-                    thread.start()
-                    thread.join()
+            for thread_zone in threads_zones:
+                thread_zone.join()
 
-                for num in range(MAX_INSTANCES_THREADS):
-                    zone = queue_zones.get()
-                    thread = Thread(target=get_instances,
-                                    name="ThreadInstances_" + str(num),
-                                    args=(project, zone, queue_instances)
-                                    )
-                    thread.start()
-                    thread.join()
+            zones_list = [zone_name for zone_name in queue_zones.get()]
 
-                instances.append(queue_instances.get())
+        threads_instances = []
+        for num in range(MAX_INSTANCES_THREADS):
+            for zone in zones_list:
+                thread = Thread(target=get_instances,
+                                name="ThreadInstances_" + str(num),
+                                args=(project, zone, queue_instances,
+                                      api_version)
+                                )
+                threads_instances.append(thread)
+                thread.start()
 
-        except HttpError as exc:
-            log.info('Problem with retrieving zones: %s', str(exc))
-            continue
+            for thread_instance in threads_instances:
+                thread.join()
+
+            instances.append(queue_instances.get())
 
     inventory_json = get_inventory(instances)
     print(json.dumps(inventory_json,
