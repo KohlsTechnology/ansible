@@ -173,7 +173,6 @@ def get_inventory(instances):
     inventory['_meta'] = collections.defaultdict(
         lambda: collections.defaultdict(dict))
 
-    print('what hell: {}'.format(instances))
     for instance in instances:
         if instance['status'] in ['RUNNING', 'STAGING']:
             inventory['_meta']['hostvars'][instance['name']] \
@@ -194,6 +193,7 @@ def get_inventory(instances):
 def main(args):
     zones_queue = queue.Queue()
     instances_queue = queue.Queue()
+    projects_zones_queue = queue.Queue()
     project = args['--project']
     all_projects = args['--all-projects']
     zone = args['--zone']
@@ -229,24 +229,24 @@ def main(args):
             for thread_zone in zones_threads:
                 thread_zone.join()
 
-            # zones_list = [zone_name for zone_name in zones_queue.get()]
+            projects_zones_queue.put((project, zones_queue.get()))
 
-        for zone_name in zones_queue.get():
-            instances_threads = []
-            for num in range(int(instances_max_threads)):
+    instances_threads = []
+    for num in range(int(instances_max_threads)):
+        project_name, zone_name = projects_zones_queue.get()
 
-                thread = Thread(target=get_instances,
-                                name="ThreadInstances_" + str(num),
-                                args=(project, zone_name, instances_queue,
-                                      api_version)
-                                )
-                instances_threads.append(thread)
-                thread.start()
+        thread = Thread(target=get_instances,
+                        name="ThreadInstances_" + str(num),
+                        args=(project_name, zone_name, instances_queue,
+                              api_version)
+                        )
+        instances_threads.append(thread)
+        thread.start()
 
-                for thread_instance in instances_threads:
-                    thread.join()
+    for thread_instance in instances_threads:
+        thread_instance.join()
 
-            instances.append(instances_queue.get())
+    instances.append(instances_queue.get())
 
     inventory_json = get_inventory(instances)
     print(json.dumps(inventory_json,
