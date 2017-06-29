@@ -93,8 +93,8 @@ def get_all_billing_projects(billing_account_name, api_version='v1'):
     return project_ids
 
 
-def get_all_zones_in_project(project, zones_queue, api_version='v1'):
-    zones = []
+def get_all_zones_in_project(project, projects_zones_queue, api_version='v1'):
+    # zones = []
 
     credentials = GoogleCredentials.get_application_default()
     print('get_all_zones_in_project(), project: {}'.format(project))
@@ -108,21 +108,23 @@ def get_all_zones_in_project(project, zones_queue, api_version='v1'):
             continue
 
         for zone in response['items']:
-            zones.append(zone['name'])
+            # zones.append(zone['name'])
+            projects_zones_queue.put((project, zone['name']))
 
         request = service.zones().list_next(previous_request=request,
                                             previous_response=response)
 
     # return zones
-    zones_queue.put(zones)
-    zones_queue.task_done()
+    projects_zones_queue.task_done()
 
 
-def get_instances(project_id, zone, instances_queue, api_version='v1'):
+def get_instances(projects_zones_queue, instances_queue, api_version='v1'):
     instances = []
+    project_id, zone = projects_zones_queue.get()
     credentials = GoogleCredentials.get_application_default()
     service = discovery.build('compute', api_version, credentials=credentials)
     # pylint: disable=no-member
+
     print('get_instances(), project:{}, zone: {}'.format(project_id, zone))
     request = service.instances().list(project=project_id, zone=zone)
     while request is not None:
@@ -191,7 +193,6 @@ def get_inventory(instances):
 
 
 def main(args):
-    zones_queue = queue.Queue()
     instances_queue = queue.Queue()
     projects_zones_queue = queue.Queue()
     project = args['--project']
@@ -221,7 +222,7 @@ def main(args):
             for num in range(int(zones_max_threads)):
                 thread = Thread(target=get_all_zones_in_project,
                                 name="ThreadZones_" + str(num),
-                                args=(project, zones_queue),
+                                args=(project, projects_zones_queue),
                                 )
                 zones_threads.append(thread)
                 thread.start()
@@ -229,15 +230,13 @@ def main(args):
             for thread_zone in zones_threads:
                 thread_zone.join()
 
-            projects_zones_queue.put((project, zones_queue.get()))
-
     instances_threads = []
     for num in range(int(instances_max_threads)):
-        project_name, zone_name = projects_zones_queue.get()
 
         thread = Thread(target=get_instances,
                         name="ThreadInstances_" + str(num),
-                        args=(project_name, zone_name, instances_queue,
+                        args=(projects_zones_queue,
+                              instances_queue,
                               api_version)
                         )
         instances_threads.append(thread)
