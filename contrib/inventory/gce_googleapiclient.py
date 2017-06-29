@@ -9,6 +9,8 @@ import logging as log
 
 from os.path import basename
 from sys import argv
+from threading import Thread
+from Queue import Queue
 
 from docoptcfg import DocoptcfgFileError
 from docoptcfg import docoptcfg
@@ -82,15 +84,19 @@ def get_all_billing_projects(billing_account_name, api_version='v1'):
     return project_ids
 
 
-def get_all_zones_in_project(project, api_version='v1'):
+def get_all_zones_in_project(project, queue, api_version='v1'):
     zones = []
 
     credentials = GoogleCredentials.get_application_default()
     service = discovery.build('compute', api_version, credentials=credentials)
-
+    print('get_all_zones_in_project, queueid: ', id(queue))
     request = service.zones().list(project=project)
     while request is not None:
-        response = request.execute()
+        try:
+            response = request.execute()
+        except HttpError as exc:
+            log.info('Problem with retrieving zones: %s', str(exc))
+            continue
 
         for zone in response['items']:
             zones.append(zone['name'])
@@ -98,7 +104,8 @@ def get_all_zones_in_project(project, api_version='v1'):
         request = service.zones().list_next(previous_request=request,
                                             previous_response=response)
 
-    return zones
+    # return zones
+    queue.put(zones)
 
 
 def get_instances(project_id, zone, api_version='v1'):
@@ -171,6 +178,7 @@ def get_inventory(instances):
 
 
 def main(args):
+    queue = Queue()
     project = args['--project']
     all_projects = args['--all-projects']
     zone = args['--zone']
@@ -191,7 +199,14 @@ def main(args):
             if zone:
                 zones_list = [zone_name for zone_name in zone]
             else:
-                zones_list = get_all_zones_in_project(project)
+                for i in range(3):
+                    thread = Thread(target=get_all_zones_in_project,
+                                    name="Thread1",
+                                    args=(project, queue),
+                                    )
+                    thread.daemon = True
+                    thread.start()
+                zones_list = queue.get()
 
             for zone_name in zones_list:
                 for instance in get_instances(project_id=project,
