@@ -7,10 +7,10 @@ import collections
 import json
 import logging as log
 
+from Queue import Queue
 from os.path import basename
 from sys import argv
 from threading import Thread
-from Queue import Queue
 
 from docoptcfg import DocoptcfgFileError
 from docoptcfg import docoptcfg
@@ -20,6 +20,9 @@ from googleapiclient import discovery
 from googleapiclient.errors import HttpError
 
 from oauth2client.client import GoogleCredentials
+
+MAX_ZONES_THREADS = 1
+MAX_INSTANCES_THREADS = 1
 
 ENV_PREFIX = 'GCE_'
 
@@ -89,7 +92,7 @@ def get_all_zones_in_project(project, queue, api_version='v1'):
 
     credentials = GoogleCredentials.get_application_default()
     service = discovery.build('compute', api_version, credentials=credentials)
-    print('get_all_zones_in_project, queueid: ', id(queue))
+    print('get_all_zones_in_project, project: {}, queueid: {} '.format(project, id(queue)))
     request = service.zones().list(project=project)
     while request is not None:
         try:
@@ -106,13 +109,15 @@ def get_all_zones_in_project(project, queue, api_version='v1'):
 
     # return zones
     queue.put(zones)
+    queue.task_done()
 
 
-def get_instances(project_id, zone, api_version='v1'):
+def get_instances(project_id, zone, queue, api_version='v1'):
     instances = []
     credentials = GoogleCredentials.get_application_default()
     service = discovery.build('compute', api_version, credentials=credentials)
     # pylint: disable=no-member
+    print('get_instances(), project: {}, zone: {}'.format(project_id, zone))
     request = service.instances().list(project=project_id, zone=zone)
     while request is not None:
         try:
@@ -129,7 +134,9 @@ def get_instances(project_id, zone, api_version='v1'):
         request = service.instances().list_next(previous_request=request,
                                                 previous_response=response)
 
-    return instances
+    # return instances
+    queue.put(instances)
+    queue.task_done()
 
 
 def get_hostvars(instance):
@@ -178,7 +185,8 @@ def get_inventory(instances):
 
 
 def main(args):
-    queue = Queue()
+    queue_zones = Queue()
+    queue_instances = Queue()
     project = args['--project']
     all_projects = args['--all-projects']
     zone = args['--zone']
@@ -194,25 +202,32 @@ def main(args):
     elif all_projects or billing_account_name:
         projects_list = get_all_billing_projects(billing_account_name)
 
+    if zone:
+        zones_list = [zone_name for zone_name in zone]
+
     for project in projects_list:
         try:
-            if zone:
-                zones_list = [zone_name for zone_name in zone]
-            else:
-                for i in range(3):
-                    thread = Thread(target=get_all_zones_in_project,
-                                    name="Thread1",
-                                    args=(project, queue),
-                                    )
-                    thread.daemon = True
-                    thread.start()
-                zones_list = queue.get()
+            if not zone:
 
-            for zone_name in zones_list:
-                for instance in get_instances(project_id=project,
-                                              zone=zone_name,
-                                              api_version=api_version):
-                    instances.append(instance)
+                for num in range(MAX_ZONES_THREADS):
+                    thread = Thread(target=get_all_zones_in_project,
+                                    name="ThreadZones_" + str(num),
+                                    args=(project, queue_zones),
+                                    )
+                    thread.start()
+                    thread.join()
+
+                for num in range(MAX_INSTANCES_THREADS):
+                    zone = queue_zones.get()
+                    thread = Thread(target=get_instances,
+                                    name="ThreadInstances_" + str(num),
+                                    args=(project, zone, queue_instances)
+                                    )
+                    thread.start()
+                    thread.join()
+
+                instances.append(queue_instances.get())
+
         except HttpError as exc:
             log.info('Problem with retrieving zones: %s', str(exc))
             continue
