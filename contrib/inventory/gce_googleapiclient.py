@@ -49,6 +49,8 @@ Options:
     --billing-account ACCOUNT_NAME --billing-account=ACCOUNT_NAME  Billing account name
     --all-projects                                                 Looks for every avail project for billing account
     --all-zones                                                    Looks for each zone
+    --zones-max-threads NUM --zones-max-threads=NUM                Maximum number of spawned threads for retrieving zones [default: 1]
+    --instances-max-threads NUM --instances-max-threads=NUM        Maximum number of spawned threads for retrieving instances [default: 1]
     -a API_VERSION --api-version=API_VERSION                       The API version used to connect to GCE [default: v1]
     -c CONFIG_FILE --config=CONFIG_FILE                            Path to the config file (see docoptcfg docs) [default: ./gce_googleapiclient.ini]
     -l --list                                                      List all hosts (needed by Ansible, but actually doesn't do anything)
@@ -92,7 +94,6 @@ def get_all_zones_in_project(project, queue, api_version='v1'):
 
     credentials = GoogleCredentials.get_application_default()
     service = discovery.build('compute', api_version, credentials=credentials)
-    print('get_all_zones_in_project, project: {}, queueid: {} '.format(project, id(queue)))
     request = service.zones().list(project=project)
     while request is not None:
         try:
@@ -117,7 +118,6 @@ def get_instances(project_id, zone, queue, api_version='v1'):
     credentials = GoogleCredentials.get_application_default()
     service = discovery.build('compute', api_version, credentials=credentials)
     # pylint: disable=no-member
-    print('get_instances(), project: {}, zone: {}'.format(project_id, zone))
     request = service.instances().list(project=project_id, zone=zone)
     while request is not None:
         try:
@@ -192,6 +192,8 @@ def main(args):
     zone = args['--zone']
     api_version = args['--api-version']
     billing_account_name = args['--billing-account']
+    zones_max_threads = args['--zones-max-threads']
+    instances_max_threads = args['--instances-max-threads']
 
     projects_list = []
     zones_list = []
@@ -208,7 +210,7 @@ def main(args):
     for project in projects_list:
         if not zones_list:
             threads_zones = []
-            for num in range(MAX_ZONES_THREADS):
+            for num in range(int(zones_max_threads)):
                 thread = Thread(target=get_all_zones_in_project,
                                 name="ThreadZones_" + str(num),
                                 args=(project, queue_zones),
@@ -222,7 +224,7 @@ def main(args):
             zones_list = [zone_name for zone_name in queue_zones.get()]
 
         threads_instances = []
-        for num in range(MAX_INSTANCES_THREADS):
+        for num in range(int(instances_max_threads)):
             for zone in zones_list:
                 thread = Thread(target=get_instances,
                                 name="ThreadInstances_" + str(num),
