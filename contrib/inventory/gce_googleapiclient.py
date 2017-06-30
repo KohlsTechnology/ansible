@@ -8,7 +8,13 @@ import json
 import logging as log
 
 from os.path import basename
-from sys import argv
+from sys import argv, version_info
+if version_info < (3, 0):
+    import Queue as queue
+else:
+    import queue
+
+from threading import Thread
 
 from docoptcfg import DocoptcfgFileError
 from docoptcfg import docoptcfg
@@ -18,6 +24,9 @@ from googleapiclient import discovery
 from googleapiclient.errors import HttpError
 
 from oauth2client.client import GoogleCredentials
+
+MAX_ZONES_THREADS = 1
+MAX_INSTANCES_THREADS = 1
 
 ENV_PREFIX = 'GCE_'
 
@@ -44,6 +53,8 @@ Options:
     --billing-account ACCOUNT_NAME --billing-account=ACCOUNT_NAME  Billing account name
     --all-projects                                                 Looks for every avail project for billing account
     --all-zones                                                    Looks for each zone
+    --zones-max-threads NUM --zones-max-threads=NUM                Maximum number of spawned threads for retrieving zones [default: 1]
+    --instances-max-threads NUM --instances-max-threads=NUM        Maximum number of spawned threads for retrieving instances [default: 1]
     -a API_VERSION --api-version=API_VERSION                       The API version used to connect to GCE [default: v1]
     -c CONFIG_FILE --config=CONFIG_FILE                            Path to the config file (see docoptcfg docs) [default: ./gce_googleapiclient.ini]
     -l --list                                                      List all hosts (needed by Ansible, but actually doesn't do anything)
@@ -82,30 +93,39 @@ def get_all_billing_projects(billing_account_name, api_version='v1'):
     return project_ids
 
 
-def get_all_zones_in_project(project, api_version='v1'):
-    zones = []
+def get_all_zones_in_project(project, projects_zones_queue, api_version='v1'):
+    # zones = []
 
     credentials = GoogleCredentials.get_application_default()
+    print('get_all_zones_in_project(), project: {}'.format(project))
     service = discovery.build('compute', api_version, credentials=credentials)
-
     request = service.zones().list(project=project)
     while request is not None:
-        response = request.execute()
+        try:
+            response = request.execute()
+        except HttpError as exc:
+            log.info('Problem with retrieving zones: %s', str(exc))
+            continue
 
         for zone in response['items']:
-            zones.append(zone['name'])
+            # zones.append(zone['name'])
+            projects_zones_queue.put((project, zone['name']))
 
         request = service.zones().list_next(previous_request=request,
                                             previous_response=response)
 
-    return zones
+    # return zones
+    projects_zones_queue.task_done()
 
 
-def get_instances(project_id, zone, api_version='v1'):
+def get_instances(projects_zones_queue, instances_queue, api_version='v1'):
     instances = []
+    project_id, zone = projects_zones_queue.get()
     credentials = GoogleCredentials.get_application_default()
     service = discovery.build('compute', api_version, credentials=credentials)
     # pylint: disable=no-member
+
+    print('get_instances(), project:{}, zone: {}'.format(project_id, zone))
     request = service.instances().list(project=project_id, zone=zone)
     while request is not None:
         try:
@@ -122,7 +142,9 @@ def get_instances(project_id, zone, api_version='v1'):
         request = service.instances().list_next(previous_request=request,
                                                 previous_response=response)
 
-    return instances
+    # return instances
+    instances_queue.put(instances)
+    instances_queue.task_done()
 
 
 def get_hostvars(instance):
@@ -174,11 +196,15 @@ def get_inventory(instances):
 
 
 def main(args):
+    instances_queue = queue.Queue()
+    projects_zones_queue = queue.Queue()
     project = args['--project']
     all_projects = args['--all-projects']
     zone = args['--zone']
     api_version = args['--api-version']
     billing_account_name = args['--billing-account']
+    zones_max_threads = args['--zones-max-threads']
+    instances_max_threads = args['--instances-max-threads']
 
     projects_list = []
     zones_list = []
@@ -189,21 +215,40 @@ def main(args):
     elif all_projects or billing_account_name:
         projects_list = get_all_billing_projects(billing_account_name)
 
-    for project in projects_list:
-        try:
-            if zone:
-                zones_list = [zone_name for zone_name in zone]
-            else:
-                zones_list = get_all_zones_in_project(project)
+    # TODO: warning queue
+    if zone:
+        zones_list = [zone_name for zone_name in zone]
 
-            for zone_name in zones_list:
-                for instance in get_instances(project_id=project,
-                                              zone=zone_name,
-                                              api_version=api_version):
-                    instances.append(instance)
-        except HttpError as exc:
-            log.info('Problem with retrieving zones: %s', str(exc))
-            continue
+    for project in projects_list:
+        if not zones_list:
+            zones_threads = []
+            for num in range(int(zones_max_threads)):
+                thread = Thread(target=get_all_zones_in_project,
+                                name="ThreadZones_" + str(num),
+                                args=(project, projects_zones_queue),
+                                )
+                zones_threads.append(thread)
+                thread.start()
+
+            for thread_zone in zones_threads:
+                thread_zone.join()
+
+    instances_threads = []
+    for num in range(int(instances_max_threads)):
+
+        thread = Thread(target=get_instances,
+                        name="ThreadInstances_" + str(num),
+                        args=(projects_zones_queue,
+                              instances_queue,
+                              api_version)
+                        )
+        instances_threads.append(thread)
+        thread.start()
+
+    for thread_instance in instances_threads:
+        thread_instance.join()
+
+    instances.append(instances_queue.get())
 
     inventory_json = get_inventory(instances)
     print(json.dumps(inventory_json,
