@@ -143,7 +143,6 @@ def get_hostvars(instance):
     for md in instance['metadata'].get('items', []):
         hostvars['gce_metadata'][md['key']] = md['value']
 
-
     if 'items' in instance['tags']:
         hostvars['gce_tags'] = instance['tags']['items']
 
