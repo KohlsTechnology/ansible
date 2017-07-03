@@ -99,7 +99,7 @@ def get_all_zones_in_project(projects_queue_in, projects_zones_queue_out, api_ve
     try:
         while not projects_queue_in.empty():
             project = projects_queue_in.get(block=False)
-            log.info('Retrieving list of zones from project %s', project)
+            log.info('Retrieving list of zones of project: %s', project)
 
             try:
                 credentials = GoogleCredentials.get_application_default()
@@ -117,7 +117,7 @@ def get_all_zones_in_project(projects_queue_in, projects_zones_queue_out, api_ve
                                                         previous_response=response)
 
             except HttpError as exception:
-                log.warn('Could not retrieve list of zones for project %s', project)
+                log.warn('Could not retrieve list of zones of project: %s', project)
                 log.warn(exception)
 
     except queue.Empty:
@@ -128,7 +128,7 @@ def get_instances(projects_zones_queue_in, instances_queue_out, api_version=DEFA
     try:
         while not projects_zones_queue_in.empty():
             project, zone = projects_zones_queue_in.get(block=False)
-            log.info('Retrieving list of instances from project/zone %s/%s', project, zone)
+            log.info('Retrieving list of instances from project/zone: %s/%s', project, zone)
             try:
 
                 credentials = GoogleCredentials.get_application_default()
@@ -147,7 +147,7 @@ def get_instances(projects_zones_queue_in, instances_queue_out, api_version=DEFA
                                                             previous_response=response)
 
             except HttpError as exception:
-                log.warn('Problem with retrieving instances from project/zone %s/%s', project, zone)
+                log.warn('Could not retrieve list of instances of project/zone: %s/%s', project, zone)
                 log.warn(str(exception))
 
         # pylint: disable=no-member
