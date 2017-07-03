@@ -172,35 +172,30 @@ def get_inventory(instances):
 
 
 def main(args):
-    project = args['--project']
+    project_list = args['--project']
     all_projects = args['--all-projects']
-    zone = args['--zone']
+    all_zones = args['--all-zones']
+    zone_list = args['--zone']
     api_version = args['--api-version']
     billing_account_name = args['--billing-account']
 
-    projects_list = []
-    zones_list = []
     instances = []
 
-    if project:
-        projects_list = [project_name for project_name in project]
-    elif all_projects or billing_account_name:
-        projects_list = get_all_billing_projects(billing_account_name)
+    if all_projects and billing_account_name:
+        project_list = get_all_billing_projects(billing_account_name)
 
-    for project in projects_list:
+    for project in project_list:
         try:
-            if zone:
-                zones_list = [zone_name for zone_name in zone]
-            else:
-                zones_list = get_all_zones_in_project(project)
+            if all_zones:
+                zone_list = get_all_zones_in_project(project)
 
-            for zone_name in zones_list:
+            for zone_name in zone_list:
                 for instance in get_instances(project_id=project,
                                               zone=zone_name,
                                               api_version=api_version):
                     instances.append(instance)
-        except HttpError as exc:
-            log.info('Problem with retrieving zones: %s', str(exc))
+        except HttpError as exception:
+            log.info('Problem with retrieving zones: %s', str(exception))
             continue
 
     inventory_json = get_inventory(instances)
