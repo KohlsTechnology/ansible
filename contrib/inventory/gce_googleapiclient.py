@@ -55,17 +55,17 @@ Setting multiple values parameters:
     use:
 
 1. Command line:
-$ ./gce_googleapiclient.py (...) --zone zone1 --zone zone2 (...)
+    $ ./gce_googleapiclient.py (...) --zone zone1 --zone zone2 (...)
 
 2. Environment variables:
-$ (...) GCE_ZONE0=zone1 GCE_ZONE1=zone2 (...) ./gce_googleapiclient.py
-    Obs: from docoptcfg documentation "(...) can set PREFIX_KEY=one,
+    $ (...) GCE_ZONE0=zone1 GCE_ZONE1=zone2 (...) ./gce_googleapiclient.py
+        Obs: from docoptcfg documentation "(...) can set PREFIX_KEY=one,
     PREFIX_KEY0=two, and so on (up to 99 is supported). They can also start at
     1: PREFIX_KEY=one, PREFIX_KEY1=two, PREFIX_KEY2=three. They can even skip
     the integer-less variable and do PREFIX_KEY0=one, PREFIX_KEY1=two and so
     on. The first variable must start either integer-less or with 0."
 
-3. Config file:
+3. Config ini file:
 [gce_googleapiclient.py]
 (...)
 zone = zone1
