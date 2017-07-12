@@ -277,7 +277,7 @@ def get_inventory(instances):
 def main(args):
 
     if args['--debug']:
-        log.basicConfig(filename='get_instances.log', level=log.DEBUG)
+        log.basicConfig(filename='gce_googleapiclient.log', level=log.DEBUG)
     else:
         log.basicConfig(level=log.ERROR)
 
@@ -287,19 +287,19 @@ def main(args):
     billing_account_name = args['--billing-account']
     num_threads = int(args['--num-threads'])
 
+    if not project_list and not billing_account_name:
+        print("ERROR: You didn't specified any project (parameter: --project) which means you want all projects."
+              " However, to get the list of all projects, we need the billing account name (parameter: "
+              " --billing-account, format: billingAccounts/XXXXXX-XXXXXX-XXXXXX)", file=stderr)
+        exit(1)
+
     if num_threads < 1:
         num_threads = 1
 
-    instances = []
-
-    if not project_list and billing_account_name:
+    if not project_list:
         project_list = get_all_billing_projects(billing_account_name)
-    elif not project_list:
-        print("ERROR: You didn't specified any project (parameter: --project) which means you want all projects."
-              + " However, to get the list of all projects, we need the billing account name (parameter: "
-              + " --billing-account, format: billingAccounts/XXXXXX-XXXXXX-XXXXXX)", file=stderr)
-        exit(1)
 
+    instances = []
     projects_queue = queue.Queue()
     projects_zones_queue = queue.Queue()
     instances_queue = queue.Queue()
