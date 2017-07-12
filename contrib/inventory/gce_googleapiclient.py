@@ -66,12 +66,12 @@ Setting multiple values parameters:
     on. The first variable must start either integer-less or with 0."
 
 3. Config ini file:
-[gce_googleapiclient.py]
-(...)
-zone = zone1
-       zone2
-(...)
-    Obs: It is important to have at least one space or tab char before 'zone2'
+    [gce_googleapiclient.py]
+    (...)
+    zone = zone1
+           zone2
+    (...)
+        Obs: It is important to have at least one space or tab char before 'zone2'
 """
 
 from __future__ import print_function
