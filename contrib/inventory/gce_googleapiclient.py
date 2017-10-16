@@ -165,9 +165,7 @@ def get_all_billing_projects(billing_account_name, cache_dir, refresh_cache=True
     # pylint: disable=no-member
     service = GCAPI.get_service('cloudbilling')
 
-    cache_expired = is_cache_expired(cache_dir)
-
-    if refresh_cache or cache_expired:
+    if refresh_cache or is_cache_expired(cache_dir):
         request = service.billingAccounts().projects().list(name=billing_account_name)
 
         while request is not None:
@@ -279,9 +277,7 @@ def get_project_zone_list(params):
 
     service = GCAPI.get_service('compute')
 
-    cache_expired = is_cache_expired(cache_dir, project)
-
-    if refresh_cache or cache_expired:
+    if refresh_cache or is_cache_expired(cache_dir, project):
         try:
             request = service.zones().list(project=project)
 
@@ -315,9 +311,7 @@ def get_project_zone_instances(params):
 
     service = GCAPI.get_service('compute')
 
-    cache_expired = is_cache_expired(cache_dir, project, zone)
-
-    if refresh_cache or cache_expired:
+    if refresh_cache or is_cache_expired(cache_dir, project, zone):
         try:
             # pylint: disable=no-member
             request = service.instances().list(project=project, zone=zone)
