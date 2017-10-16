@@ -36,10 +36,10 @@ Usage:
         [options]
 
 Arguments:
-    -b, --billing-account=ACCOUNT_NAME  The billing account associated with the projects you want to
+    -b, --billing-account ACCOUNT_NAME  The billing account associated with the projects you want to
                                         get information. It is only needed to get the list of the
                                         projects (when --project parameter isn't set)
-    -c, --config=CONFIG_FILE            Path to the config file [default: ./gce_googleapiclient.ini]
+    -c, --config CONFIG_FILE            Path to the config file [default: ./gce_googleapiclient.ini]
     -p, --project PROJECT               Google Cloud projects to search for instances
     -t, --num-threads NUM_THREADS       Enable multi-threading, set it to NUM_THREADS [default: 4]
     -z, --zone ZONE                     Google Cloud zones to search for instances
