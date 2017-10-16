@@ -428,8 +428,8 @@ def store_cache(data, cache_dir, project=None, zone=None):
 
 def main(args):
 
-    if not args['--debug']:
-        log.basicConfig(level=log.ERROR)
+    if args['--debug']:
+        log.getLogger().setLevel(log.DEBUG)
 
     project_list = args['--project']
     zone_list = args['--zone']
@@ -487,7 +487,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    log.basicConfig(filename='gce_googleapiclient.log', level=log.DEBUG)
+    log.basicConfig(filename='gce_googleapiclient.log', level=log.ERROR)
     try:
         ARGS = docoptcfg(__doc__,
                          config_option='--config',
