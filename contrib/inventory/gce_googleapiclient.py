@@ -140,6 +140,7 @@ def signal_handler():  # pragma: no cover
 
 
 def get_all_billing_projects(billing_account_name, cache_dir, refresh_cache=True):
+
     project_ids = []
 
     # pylint: disable=no-member
@@ -167,6 +168,7 @@ def get_all_billing_projects(billing_account_name, cache_dir, refresh_cache=True
 
 
 def get_hostvars(instance):
+
     hostvars = {
         'gce_name': instance['name'],
         'gce_id': instance['id'],
@@ -213,6 +215,7 @@ def get_hostvars(instance):
 
 
 def get_inventory(instances):
+
     inventory = collections.defaultdict(list)
     inventory['_meta'] = collections.defaultdict(
         lambda: collections.defaultdict(dict))
@@ -277,7 +280,6 @@ def get_project_zone_list(params):
         log.info('Using cached zone list for project: %s', project)
         zone_list = get_cached_data(cache_dir, project=project)
 
-
     return project, zone_list
 
 
@@ -318,8 +320,8 @@ def get_project_zone_instances(params):
 
 
 def is_cache_expired(cache_dir, project=None, zone=None):
-    expired = True
 
+    expired = True
     data_dir = cache_dir
     data_file = os.path.join(data_dir, 'projects.json')
 
