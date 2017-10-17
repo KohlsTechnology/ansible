@@ -90,12 +90,6 @@ import shutil
 
 from Crypto import Random
 
-if sys.version_info < (3, 0):
-    pass
-else:
-    pass
-
-
 from docoptcfg import DocoptcfgFileError
 from docoptcfg import docoptcfg
 
