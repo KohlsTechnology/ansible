@@ -61,11 +61,10 @@ Setting multiple values parameters:
 
 2. Environment variables:
     $ (...) GCE_ZONE0=zone1 GCE_ZONE1=zone2 (...) ./gce_googleapiclient.py
-        Obs: from docoptcfg documentation "(...) can set PREFIX_KEY=one,
-    PREFIX_KEY0=two, and so on (up to 99 is supported). They can also start at
-    1: PREFIX_KEY=one, PREFIX_KEY1=two, PREFIX_KEY2=three. They can even skip
-    the integer-less variable and do PREFIX_KEY0=one, PREFIX_KEY1=two and so
-    on. The first variable must start either integer-less or with 0."
+        Obs: from docoptcfg documentation "(...) can set PREFIX_KEY=one, PREFIX_KEY0=two, and so on
+    (up to 99 is supported). They can also start at 1: PREFIX_KEY=one, PREFIX_KEY1=two,
+    PREFIX_KEY2=three. They can even skip the integer-less variable and do PREFIX_KEY0=one,
+    PREFIX_KEY1=two and so on. The first variable must start either integer-less or with 0."
 
 3. Config ini file:
     [gce_googleapiclient.py]
@@ -110,27 +109,15 @@ class GCloudAPI(object):
     Class for handling the access to Google Cloud API.
     """
     def __init__(self, api_version=API_VERSION):
-        # type: (str) -> None
-        """
-        Initialize Google Cloud API wrapper.
-
-        :param str api_version: api version used to connect
-        """
 
         self.credentials = GoogleCredentials.get_application_default()
         self.api_version = api_version
-        self.services = {}  # type: Dict[str, Any]
+        self.services = {}
 
         for service_type in ['compute', 'cloudbilling']:
             self.get_service(service_type)
 
     def get_service(self, service_name):
-        # type: (str) -> Any
-        """
-        Get service object; initialize if not initialized yet.
-
-        :param str service_name: name of the service object to get
-        """
 
         if service_name not in self.services:
             self.services[service_name] = discovery.build(serviceName=service_name,
@@ -144,13 +131,12 @@ GCAPI = GCloudAPI()
 
 
 def signal_handler():  # pragma: no cover
-    # type: () -> None
     """Signal handler for all worker processes, allowing clean CTRL-C"""
 
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
     # when forking using multiprocessing, this is required to re-init random seed
-    Random.atfork()  # type: ignore
+    Random.atfork()
 
 
 def get_all_billing_projects(billing_account_name, cache_dir, refresh_cache=True):
@@ -262,7 +248,6 @@ def get_inventory(instances):
 
 
 def get_project_zone_list(params):
-    # type: (Tuple[str, bool]) -> Tuple[str, List[str]]
     """Get list of all zones for particular project (Worker process)"""
 
     project, cache_dir, refresh_cache  = params
@@ -297,7 +282,6 @@ def get_project_zone_list(params):
 
 
 def get_project_zone_instances(params):
-    # type: (Tuple[str, str, bool]) -> List[str]
     """Get list of all instances for particular project/zone (Worker process)"""
 
     project, zone, cache_dir, refresh_cache = params
