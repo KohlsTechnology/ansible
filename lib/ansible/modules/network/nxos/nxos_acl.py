@@ -16,11 +16,9 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-ANSIBLE_METADATA = {
-    'metadata_version': '1.0',
-    'status': ['preview'],
-    'supported_by': 'community'
-}
+ANSIBLE_METADATA = {'metadata_version': '1.1',
+                    'status': ['preview'],
+                    'supported_by': 'network'}
 
 
 DOCUMENTATION = '''
@@ -35,6 +33,7 @@ author:
   - Jason Edelman (@jedelman8)
   - Gabriele Gerbino (@GGabriele)
 notes:
+  - Tested against NXOSv 7.3.(0)D1(1) on VIRL
   - C(state=absent) removes the ACE if it exists.
   - C(state=delete_acl) deletes the ACL if it exists.
   - For idempotency, use port numbers for the src/dest port
@@ -173,7 +172,7 @@ options:
     required: false
     default: null
     choices: ['enable']
-  time-range:
+  time_range:
     description:
       - Name of time-range to apply.
     required: false
@@ -211,7 +210,6 @@ EXAMPLES = '''
     src: 1.1.1.1/24
     dest: any
     state: present
-    provider: "{{ nxos_provider }}"
 '''
 
 RETURN = '''
@@ -221,14 +219,13 @@ commands:
     type: list
     sample: ["ip access-list ANSIBLE", "10 permit tcp 1.1.1.1/24 any"]
 '''
-from ansible.module_utils.nxos import load_config, run_commands
-from ansible.module_utils.nxos import nxos_argument_spec, check_args
+from ansible.module_utils.network.nxos.nxos import load_config, run_commands
+from ansible.module_utils.network.nxos.nxos import nxos_argument_spec, check_args
 from ansible.module_utils.basic import AnsibleModule
 
 
 def execute_show_command(command, module):
-    if module.params['transport'] == 'cli':
-        command += ' | json'
+    command += ' | json'
     cmds = [command]
     body = run_commands(module, cmds)
     return body
@@ -241,11 +238,20 @@ def get_acl(module, acl_name, seq_number):
     acl_body = {}
 
     body = execute_show_command(command, module)[0]
-    all_acl_body = body['TABLE_ip_ipv6_mac']['ROW_ip_ipv6_mac']
+    if body:
+        all_acl_body = body['TABLE_ip_ipv6_mac']['ROW_ip_ipv6_mac']
+    else:
+        # no access-lists configured on the device
+        return {}, []
 
-    for acl in all_acl_body:
-        if acl.get('acl_name') == acl_name:
-            acl_body = acl
+    if isinstance(all_acl_body, dict):
+        # Only 1 ACL configured.
+        if all_acl_body.get('acl_name') == acl_name:
+            acl_body = all_acl_body
+    else:
+        for acl in all_acl_body:
+            if acl.get('acl_name') == acl_name:
+                acl_body = acl
 
     try:
         acl_entries = acl_body['TABLE_seqno']['ROW_seqno']
@@ -421,14 +427,7 @@ def main():
                                            'cs1', 'cs2', 'cs3', 'cs4',
                                            'cs5', 'cs6', 'cs7', 'default',
                                            'ef']),
-        state=dict(choices=['absent', 'present', 'delete_acl'], default='present'),
-        protocol=dict(choices=['http', 'https'], default='http'),
-        host=dict(required=True),
-        username=dict(type='str'),
-        password=dict(no_log=True, type='str'),
-        include_defaults=dict(default=False),
-        config=dict(),
-        save=dict(type='bool', default=False)
+        state=dict(choices=['absent', 'present', 'delete_acl'], default='present')
     )
 
     argument_spec.update(nxos_argument_spec)

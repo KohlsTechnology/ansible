@@ -1,22 +1,14 @@
 #!/usr/bin/python
-#coding: utf-8 -*-
+# coding: utf-8 -*-
 
 # (c) 2017, Wayne Witzel III <wayne@riotousliving.com>
-#
-# This module is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This software is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this software.  If not, see <http://www.gnu.org/licenses/>.
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
-ANSIBLE_METADATA = {'metadata_version': '1.0',
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
+
+
+ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
 
@@ -145,45 +137,7 @@ options:
       required: False
       default: "present"
       choices: ["present", "absent"]
-    tower_host:
-      description:
-        - URL to your Tower instance.
-      required: False
-      default: null
-    tower_username:
-        description:
-          - Username for your Tower instance.
-        required: False
-        default: null
-    tower_password:
-        description:
-          - Password for your Tower instance.
-        required: False
-        default: null
-    tower_verify_ssl:
-        description:
-          - Dis/allow insecure connections to Tower. If C(no), SSL certificates will not be validated.
-            This should only be used on personally controlled sites using self-signed certificates.
-        required: False
-        default: True
-    tower_config_file:
-      description:
-        - Path to the Tower config file. See notes.
-      required: False
-      default: null
-
-
-requirements:
-  - "python >= 2.6"
-  - "ansible-tower-cli >= 3.0.3"
-
-notes:
-  - If no I(config_file) is provided we will attempt to use the tower-cli library
-    defaults to find your Tower host information.
-  - I(config_file) should contain Tower configuration in the following format
-      host=hostname
-      username=username
-      password=password
+extends_documentation_fragment: tower
 '''
 
 
@@ -200,16 +154,15 @@ EXAMPLES = '''
     tower_config_file: "~/tower_cli.cfg"
 '''
 
+from ansible.module_utils.ansible_tower import tower_argument_spec, tower_auth_config, tower_check_mode, HAS_TOWER_CLI
+
 try:
     import tower_cli
     import tower_cli.utils.exceptions as exc
 
     from tower_cli.conf import settings
-    from ansible.module_utils.ansible_tower import tower_auth_config, tower_check_mode
-
-    HAS_TOWER_CLI = True
 except ImportError:
-    HAS_TOWER_CLI = False
+    pass
 
 
 def update_fields(p):
@@ -220,7 +173,7 @@ def update_fields(p):
     params = p.copy()
     field_map = {
         'ask_extra_vars': 'ask_variables_on_launch',
-        'ask_limit' :'ask_limit_on_launch',
+        'ask_limit': 'ask_limit_on_launch',
         'ask_tags': 'ask_tags_on_launch',
         'ask_job_type': 'ask_job_type_on_launch',
         'machine_credential': 'credential',
@@ -233,7 +186,7 @@ def update_fields(p):
 
     extra_vars = params.get('extra_vars_path')
     if extra_vars is not None:
-        params_update['extra_vars'] = '@' + extra_vars
+        params_update['extra_vars'] = ['@' + extra_vars]
 
     params.update(params_update)
     return params
@@ -248,11 +201,11 @@ def update_resources(module, p):
         'network_credential': 'name',
         'cloud_credential': 'name',
     }
-    for k,v in identity_map.items():
+    for k, v in identity_map.items():
         try:
             if params[k]:
                 key = 'credential' if '_credential' in k else k
-                result = tower_cli.get_resource(key).get(**{v:params[k]})
+                result = tower_cli.get_resource(key).get(**{v: params[k]})
                 params[k] = result['id']
         except (exc.NotFound) as excinfo:
             module.fail_json(msg='Failed to update job template: {0}'.format(excinfo), changed=False)
@@ -260,40 +213,35 @@ def update_resources(module, p):
 
 
 def main():
-    module = AnsibleModule(
-        argument_spec = dict(
-            name = dict(required=True),
-            description = dict(),
-            job_type = dict(choices=['run', 'check', 'scan'], required=True),
-            inventory = dict(),
-            project = dict(required=True),
-            playbook = dict(required=True),
-            machine_credential = dict(),
-            cloud_credential = dict(),
-            network_credential = dict(),
-            forks = dict(type='int'),
-            limit = dict(),
-            verbosity = dict(choices=['verbose', 'debug']),
-            job_tags = dict(),
-            skip_tags = dict(),
-            host_config_key = dict(),
-            extra_vars_path = dict(type='path', required=False),
-            ask_extra_vars = dict(type='bool', default=False),
-            ask_limit = dict(type='bool', default=False),
-            ask_tags = dict(type='bool', default=False),
-            ask_job_type = dict(type='bool', default=False),
-            ask_inventory = dict(type='bool', default=False),
-            ask_credential = dict(type='bool', default=False),
-            become_enabled = dict(type='bool', default=False),
-            tower_host = dict(),
-            tower_username = dict(),
-            tower_password = dict(no_log=True),
-            tower_verify_ssl = dict(type='bool', default=True),
-            tower_config_file = dict(type='path'),
-            state = dict(choices=['present', 'absent'], default='present'),
-        ),
-        supports_check_mode=True
-    )
+    argument_spec = tower_argument_spec()
+    argument_spec.update(dict(
+        name=dict(required=True),
+        description=dict(),
+        job_type=dict(choices=['run', 'check', 'scan'], required=True),
+        inventory=dict(),
+        project=dict(required=True),
+        playbook=dict(required=True),
+        machine_credential=dict(),
+        cloud_credential=dict(),
+        network_credential=dict(),
+        forks=dict(type='int'),
+        limit=dict(),
+        verbosity=dict(choices=['verbose', 'debug']),
+        job_tags=dict(),
+        skip_tags=dict(),
+        host_config_key=dict(),
+        extra_vars_path=dict(type='path', required=False),
+        ask_extra_vars=dict(type='bool', default=False),
+        ask_limit=dict(type='bool', default=False),
+        ask_tags=dict(type='bool', default=False),
+        ask_job_type=dict(type='bool', default=False),
+        ask_inventory=dict(type='bool', default=False),
+        ask_credential=dict(type='bool', default=False),
+        become_enabled=dict(type='bool', default=False),
+        state=dict(choices=['present', 'absent'], default='present'),
+    ))
+
+    module = AnsibleModule(argument_spec=argument_spec, supports_check_mode=True)
 
     if not HAS_TOWER_CLI:
         module.fail_json(msg='ansible-tower-cli required for this module')

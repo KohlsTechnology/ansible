@@ -19,7 +19,7 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-ANSIBLE_METADATA = {'metadata_version': '1.0',
+ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
 
@@ -134,7 +134,7 @@ id:
     sample: 7de90f31-222c-436c-a1ca-7e655bd5b60c
 host_nic:
     description: "Dictionary of all the host NIC attributes. Host NIC attributes can be found on your oVirt/RHV instance
-                  at following url: https://ovirt.example.com/ovirt-engine/api/model#types/host_nic."
+                  at following url: http://ovirt.github.io/ovirt-engine-api-model/master/#types/host_nic."
     returned: On success if host NIC is found.
     type: dict
 '''
@@ -166,7 +166,7 @@ class HostNetworksModule(BaseModule):
         return otypes.Host()
 
     def update_address(self, attachments_service, attachment, network):
-        # Check if there is any change in address assignenmts and
+        # Check if there is any change in address assignments and
         # update it if needed:
         for ip in attachment.ip_address_assignments:
             if str(ip.ip.version) == network.get('version', 'v4'):
@@ -180,7 +180,7 @@ class HostNetworksModule(BaseModule):
                 if not equal(network.get('gateway'), ip.ip.gateway):
                     ip.ip.gateway = network.get('gateway')
                     changed = True
-                if not equal(network.get('prefix'), int(ip.ip.netmask) if ip.ip.netmask else None):
+                if not equal(network.get('prefix'), sum([bin(int(x)).count('1') for x in ip.ip.netmask.split('.')]) if ip.ip.netmask else None):
                     ip.ip.netmask = str(network.get('prefix'))
                     changed = True
 
@@ -194,6 +194,7 @@ class HostNetworksModule(BaseModule):
         update = False
         bond = self._module.params['bond']
         networks = self._module.params['networks']
+        labels = self._module.params['labels']
         nic = get_entity(nic_service)
 
         if nic is None:
@@ -208,6 +209,12 @@ class HostNetworksModule(BaseModule):
                     sorted(get_link_name(self._connection, s) for s in nic.bonding.slaves)
                 )
             )
+
+        # Check if labels need to be updated on interface/bond:
+        if labels:
+            net_labels = nic_service.network_labels_service().list()
+            if sorted(labels) != sorted([lbl.id for lbl in net_labels]):
+                return True
 
         if not networks:
             return update
@@ -224,7 +231,7 @@ class HostNetworksModule(BaseModule):
 
         for network in networks:
             attachment = attachments.get(network.get('name'))
-            # If attachment don't exsits, we need to create it:
+            # If attachment don't exists, we need to create it:
             if attachment is None:
                 return True
 
@@ -307,7 +314,7 @@ def main():
                 ] if bond else None,
                 modified_labels=[
                     otypes.NetworkLabel(
-                        name=str(name),
+                        id=str(name),
                         host_nic=otypes.HostNic(
                             name=bond.get('name') if bond else interface
                         ),

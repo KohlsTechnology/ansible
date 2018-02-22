@@ -7,21 +7,13 @@
 # Modified by William L. Thomson Jr. <wlt@o-sinc.com>
 # Based on apt module written by Matthew Williams <matthew@flowroute.com>
 #
-# This module is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This software is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this software.  If not, see <http://www.gnu.org/licenses/>.
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
 
 
-ANSIBLE_METADATA = {'metadata_version': '1.0',
+ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
 
@@ -164,6 +156,8 @@ options:
   jobs:
     description:
       - Specifies the number of packages to build simultaneously.
+      - "Since version 2.6: Value of 0 or False resets any previously added"
+      - --jobs setting values
     required: false
     default: None
     version_added: 2.3
@@ -172,6 +166,8 @@ options:
     description:
       - Specifies that no new builds should be started if there are
       - other builds running and the load average is at least LOAD
+      - "Since version 2.6: Value of 0 or False resets any previously added"
+      - --load-average setting values
     required: false
     default: None
     version_added: 2.3
@@ -228,10 +224,11 @@ EXAMPLES = '''
     depclean: yes
 '''
 
-
 import os
-import pipes
 import re
+
+from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils._text import to_native
 
 
 def query_package(module, package, action):
@@ -295,9 +292,10 @@ def sync_repositories(module, webrsync=False):
 
 
 def emerge_packages(module, packages):
+    """Run emerge command against given list of atoms."""
     p = module.params
 
-    if not (p['update'] or p['noreplace'] or p['state']=='latest'):
+    if not (p['update'] or p['noreplace'] or p['state'] == 'latest'):
         for package in packages:
             if not query_package(module, package, 'emerge'):
                 break
@@ -327,20 +325,31 @@ def emerge_packages(module, packages):
         if p[flag]:
             args.append(arg)
 
-    if p['state'] and p['state']=='latest':
+    if p['state'] and p['state'] == 'latest':
         args.append("--update")
 
     if p['usepkg'] and p['usepkgonly']:
         module.fail_json(msg='Use only one of usepkg, usepkgonly')
 
     emerge_flags = {
-        'jobs': '--jobs=',
-        'loadavg': '--load-average ',
+        'jobs': '--jobs',
+        'loadavg': '--load-average',
     }
 
     for flag, arg in emerge_flags.items():
-        if p[flag] is not None:
-            args.append(arg + str(p[flag]))
+        flag_val = p[flag]
+
+        if flag_val is None:
+            """Fallback to default: don't use this argument at all."""
+            continue
+
+        if not flag_val:
+            """If the value is 0 or 0.0: add the flag, but not the value."""
+            args.append(arg)
+            continue
+
+        """Add the --flag=value pair."""
+        args.extend((arg, to_native(flag_val)))
 
     cmd, (rc, out, err) = run_emerge(module, packages, *args)
     if rc != 0:
@@ -516,8 +525,6 @@ def main():
     elif p['state'] in portage_absent_states:
         unmerge_packages(module, packages)
 
-# import module snippets
-from ansible.module_utils.basic import *
 
 if __name__ == '__main__':
     main()

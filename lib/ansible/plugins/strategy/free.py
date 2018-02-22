@@ -14,8 +14,11 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
-'''
-DOCUMENTATION:
+# Make coding more python3-ish
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
+
+DOCUMENTATION = '''
     strategy: free
     short_description: Executes tasks on each host independently
     description:
@@ -25,16 +28,13 @@ DOCUMENTATION:
     version_added: "2.0"
     author: Ansible Core Team
 '''
-# Make coding more python3-ish
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
 
 import time
 
 from ansible import constants as C
 from ansible.errors import AnsibleError
 from ansible.playbook.included_file import IncludedFile
-from ansible.plugins import action_loader
+from ansible.plugins.loader import action_loader
 from ansible.plugins.strategy import StrategyBase
 from ansible.template import Templar
 from ansible.module_utils._text import to_text
@@ -79,7 +79,7 @@ class StrategyModule(StrategyBase):
                 break
 
             work_to_do = False        # assume we have no more work to do
-            starting_host = last_host # save current position so we know when we've looped back around and need to break
+            starting_host = last_host  # save current position so we know when we've looped back around and need to break
 
             # try and find an unblocked host with a task to run
             host_results = []
@@ -115,7 +115,7 @@ class StrategyModule(StrategyBase):
                             action = None
 
                         display.debug("getting variables")
-                        task_vars = self._variable_manager.get_vars(loader=self._loader, play=iterator._play, host=host, task=task)
+                        task_vars = self._variable_manager.get_vars(play=iterator._play, host=host, task=task)
                         self.add_tqm_variables(task_vars, play=iterator._play)
                         templar = Templar(loader=self._loader, variables=task_vars)
                         display.debug("done getting variables")
@@ -127,7 +127,6 @@ class StrategyModule(StrategyBase):
                             # just ignore any errors during task name templating,
                             # we don't care if it just shows the raw name
                             display.debug("templating failed for some reason")
-                            pass
 
                         run_once = templar.template(task.run_once) or action and getattr(action, 'BYPASS_HOST_LOOP', False)
                         if run_once:
@@ -155,8 +154,8 @@ class StrategyModule(StrategyBase):
                             # handle step if needed, skip meta actions as they are used internally
                             if not self._step or self._take_step(task, host_name):
                                 if task.any_errors_fatal:
-                                    display.warning("Using any_errors_fatal with the free strategy is not supported,"
-                                            " as tasks are executed independently on each host")
+                                    display.warning("Using any_errors_fatal with the free strategy is not supported, "
+                                                    "as tasks are executed independently on each host")
                                 self._tqm.send_callback('v2_playbook_on_task_start', task, is_conditional=False)
                                 self._queue_task(host, task, task_vars, play_context)
                                 del task_vars
@@ -176,12 +175,12 @@ class StrategyModule(StrategyBase):
             results = self._process_pending_results(iterator)
             host_results.extend(results)
 
+            self.update_active_connections(results)
+
             try:
                 included_files = IncludedFile.process_include_results(
                     host_results,
-                    self._tqm,
                     iterator=iterator,
-                    inventory=self._inventory,
                     loader=self._loader,
                     variable_manager=self._variable_manager
                 )
@@ -193,7 +192,17 @@ class StrategyModule(StrategyBase):
                 for included_file in included_files:
                     display.debug("collecting new blocks for %s" % included_file)
                     try:
-                        new_blocks = self._load_included_file(included_file, iterator=iterator)
+                        if included_file._is_role:
+                            new_ir = self._copy_included_file(included_file)
+
+                            new_blocks, handler_blocks = new_ir.get_block_list(
+                                play=iterator._play,
+                                variable_manager=self._variable_manager,
+                                loader=self._loader,
+                            )
+                            self._tqm.update_handler_list([handler for handler_block in handler_blocks for handler in handler_block.block])
+                        else:
+                            new_blocks = self._load_included_file(included_file, iterator=iterator)
                     except AnsibleError as e:
                         for host in included_file._hosts:
                             iterator.mark_host_failed(host)
@@ -201,7 +210,7 @@ class StrategyModule(StrategyBase):
                         continue
 
                     for new_block in new_blocks:
-                        task_vars = self._variable_manager.get_vars(loader=self._loader, play=iterator._play, task=included_file._task)
+                        task_vars = self._variable_manager.get_vars(play=iterator._play, task=included_file._task)
                         final_block = new_block.filter_tagged_tasks(play_context, task_vars)
                         for host in hosts_left:
                             if host in included_file._hosts:

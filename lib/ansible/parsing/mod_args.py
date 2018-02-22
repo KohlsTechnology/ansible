@@ -19,12 +19,11 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-
-from ansible.errors import AnsibleParserError,AnsibleError
+from ansible.errors import AnsibleParserError, AnsibleError, AnsibleAssertionError
 from ansible.module_utils.six import iteritems, string_types
 from ansible.module_utils._text import to_text
-from ansible.plugins import module_loader
 from ansible.parsing.splitter import parse_kv, split_args
+from ansible.plugins.loader import module_loader, action_loader
 from ansible.template import Templar
 
 
@@ -37,6 +36,10 @@ RAW_PARAM_MODULES = ([
     'script',
     'include',
     'include_vars',
+    'include_tasks',
+    'include_role',
+    'import_tasks',
+    'import_role',
     'add_host',
     'group_by',
     'set_fact',
@@ -92,10 +95,12 @@ class ModuleArgsParser:
     Args may also be munged for certain shell command parameters.
     """
 
-    def __init__(self, task_ds=dict()):
-        assert isinstance(task_ds, dict)
-        self._task_ds = task_ds
+    def __init__(self, task_ds=None):
+        task_ds = {} if task_ds is None else task_ds
 
+        if not isinstance(task_ds, dict):
+            raise AnsibleAssertionError("the type of 'task_ds' should be a dict, but is a %s" % type(task_ds))
+        self._task_ds = task_ds
 
     def _split_module_string(self, module_string):
         '''
@@ -111,26 +116,12 @@ class ModuleArgsParser:
         else:
             return (tokens[0], "")
 
-
-    def _handle_shell_weirdness(self, action, args):
-        '''
-        given an action name and an args dictionary, return the
-        proper action name and args dictionary.  This mostly is due
-        to shell/command being treated special and nothing else
-        '''
-
-        # the shell module really is the command module with an additional
-        # parameter
-        if action == 'shell':
-            action = 'command'
-            args['_uses_shell'] = True
-
-        return (action, args)
-
-    def _normalize_parameters(self, thing, action=None, additional_args=dict()):
+    def _normalize_parameters(self, thing, action=None, additional_args=None):
         '''
         arguments can be fuzzy.  Deal with all the forms.
         '''
+
+        additional_args = {} if additional_args is None else additional_args
 
         # final args are the ones we'll eventually return, so first update
         # them with any additional args specified, which have lower priority
@@ -166,7 +157,7 @@ class ModuleArgsParser:
                 args.update(tmp_args)
 
         # only internal variables can start with an underscore, so
-        # we don't allow users to set them directy in arguments
+        # we don't allow users to set them directly in arguments
         if args and action not in ('command', 'win_command', 'shell', 'win_shell', 'script', 'raw'):
             for arg in args:
                 arg = to_text(arg)
@@ -253,12 +244,11 @@ class ModuleArgsParser:
         task, dealing with all sorts of levels of fuzziness.
         '''
 
-        thing      = None
+        thing = None
 
-        action      = None
+        action = None
         delegate_to = self._task_ds.get('delegate_to', None)
-        args        = dict()
-
+        args = dict()
 
         # This is the standard YAML form for command-type modules. We grab
         # the args and pass them in as additional arguments, which can/will
@@ -271,7 +261,6 @@ class ModuleArgsParser:
             # an old school 'action' statement
             thing = self._task_ds['action']
             action, args = self._normalize_parameters(thing, action=action, additional_args=additional_args)
-
 
         # local_action
         if 'local_action' in self._task_ds:
@@ -286,7 +275,7 @@ class ModuleArgsParser:
 
         # walk the input dictionary to see we recognize a module name
         for (item, value) in iteritems(self._task_ds):
-            if item in module_loader or item in ['meta', 'include', 'include_role']:
+            if item in module_loader or item in action_loader or item in ['meta', 'include', 'include_tasks', 'include_role', 'import_tasks', 'import_role']:
                 # finding more than one module name is a problem
                 if action is not None:
                     raise AnsibleParserError("conflicting action statements: %s, %s" % (action, item), obj=self._task_ds)
@@ -294,14 +283,13 @@ class ModuleArgsParser:
                 thing = value
                 action, args = self._normalize_parameters(thing, action=action, additional_args=additional_args)
 
-
         # if we didn't see any module in the task at all, it's not a task really
         if action is None:
             if 'ping' not in module_loader:
                 raise AnsibleParserError("The requested action was not found in configured module paths. "
-                        "Additionally, core modules are missing. If this is a checkout, "
-                        "run 'git pull --rebase' to correct this problem.",
-                        obj=self._task_ds)
+                                         "Additionally, core modules are missing. If this is a checkout, "
+                                         "run 'git pull --rebase' to correct this problem.",
+                                         obj=self._task_ds)
 
             else:
                 raise AnsibleParserError("no action detected in task. This often indicates a misspelled module name, or incorrect module path.",
@@ -315,8 +303,5 @@ class ModuleArgsParser:
                 raise AnsibleParserError("this task '%s' has extra params, which is only allowed in the following modules: %s" % (action,
                                                                                                                                   ", ".join(RAW_PARAM_MODULES)),
                                          obj=self._task_ds)
-
-        # shell modules require special handling
-        (action, args) = self._handle_shell_weirdness(action, args)
 
         return (action, args, delegate_to)

@@ -2,26 +2,15 @@
 # encoding: utf-8
 
 # (c) 2016, Jiri Tyr <jiri.tyr@gmail.com>
-#
-# This file is part of Ansible
-#
-# Ansible is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Ansible is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
-ANSIBLE_METADATA = {'metadata_version': '1.0',
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
+
+
+ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
-
 
 DOCUMENTATION = '''
 ---
@@ -57,12 +46,6 @@ options:
     default: jenkins
     description:
       - Name of the Jenkins user on the OS.
-  params:
-    required: false
-    default: null
-    description:
-      - Option used to allow the user to overwrite any of the other options. To
-        remove an option, set the value of the option to C(null).
   state:
     required: false
     choices: [absent, present, pinned, unpinned, enabled, disabled, latest]
@@ -129,6 +112,10 @@ notes:
   - It is not possible to run the module remotely by changing the I(url)
     parameter to point to the Jenkins server. The module must be used on the
     host where Jenkins runs as it needs direct access to the plugin files.
+  - "The C(params) option was removed in Ansible 2.5 due to circumventing Ansible's
+    option handling"
+extends_documentation_fragment:
+  - url
 '''
 
 EXAMPLES = '''
@@ -177,20 +164,14 @@ EXAMPLES = '''
     state: absent
 
 #
-# Example of how to use the params
-#
-# Define a variable and specify all default parameters you want to use across
-# all jenkins_plugin calls:
-#
-# my_jenkins_params:
-#   url_username: admin
-#   url_password: p4ssw0rd
-#   url: http://localhost:8888
+# Example of how to authenticate
 #
 - name: Install plugin
   jenkins_plugin:
     name: build-pipeline-plugin
-    params: "{{ my_jenkins_params }}"
+    url_username: admin
+    url_password: p4ssw0rd
+    url: http://localhost:8888
 
 #
 # Example of a Play which handles Jenkins restarts during the state changes
@@ -295,7 +276,7 @@ state:
 '''
 
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.pycompat24 import get_exception
+from ansible.module_utils.six.moves.urllib.parse import urlencode
 from ansible.module_utils.urls import fetch_url, url_argument_spec
 from ansible.module_utils._text import to_native
 import base64
@@ -304,7 +285,6 @@ import json
 import os
 import tempfile
 import time
-import urllib
 
 
 class JenkinsPlugin(object):
@@ -330,7 +310,12 @@ class JenkinsPlugin(object):
         csrf_data = self._get_json_data(
             "%s/%s" % (self.url, "api/json"), 'CSRF')
 
-        return csrf_data["useCrumbs"]
+        if 'useCrumbs' not in csrf_data:
+            self.module.fail_json(
+                msg="Required fields not found in the Crumbs response.",
+                details=csrf_data)
+
+        return csrf_data['useCrumbs']
 
     def _get_json_data(self, url, what, **kwargs):
         # Get the JSON data
@@ -338,12 +323,11 @@ class JenkinsPlugin(object):
 
         # Parse the JSON data
         try:
-            json_data = json.load(r)
-        except Exception:
-            e = get_exception()
+            json_data = json.loads(to_native(r.read()))
+        except Exception as e:
             self.module.fail_json(
                 msg="Cannot parse %s JSON data." % what,
-                details=e.message)
+                details=to_native(e))
 
         return json_data
 
@@ -364,9 +348,8 @@ class JenkinsPlugin(object):
 
             if info['status'] != 200:
                 self.module.fail_json(msg=msg_status, details=info['msg'])
-        except Exception:
-            e = get_exception()
-            self.module.fail_json(msg=msg_exception, details=e.message)
+        except Exception as e:
+            self.module.fail_json(msg=msg_exception, details=to_native(e))
 
         return response
 
@@ -435,7 +418,7 @@ class JenkinsPlugin(object):
                     'script': install_script
                 }
                 script_data.update(self.crumb)
-                data = urllib.urlencode(script_data)
+                data = urlencode(script_data)
 
                 # Send the installation request
                 r = self._get_url_data(
@@ -514,11 +497,10 @@ class JenkinsPlugin(object):
 
                 try:
                     sha1_old = hashlib.sha1(open(plugin_file, 'rb').read())
-                except Exception:
-                    e = get_exception()
+                except Exception as e:
                     self.module.fail_json(
                         msg="Cannot calculate SHA1 of the old plugin.",
-                        details=e.message)
+                        details=to_native(e))
 
                 sha1sum_old = base64.b64encode(sha1_old.digest())
 
@@ -581,8 +563,7 @@ class JenkinsPlugin(object):
 
             try:
                 os.close(update_fd)
-            except IOError:
-                e = get_exception()
+            except IOError as e:
                 self.module.fail_json(
                     msg="Cannot close the tmp updates file %s." % updates_file,
                     details=to_native(e))
@@ -590,8 +571,7 @@ class JenkinsPlugin(object):
         # Open the updates file
         try:
             f = open(updates_file)
-        except IOError:
-            e = get_exception()
+        except IOError as e:
             self.module.fail_json(
                 msg="Cannot open temporal updates file.",
                 details=to_native(e))
@@ -602,11 +582,10 @@ class JenkinsPlugin(object):
             if i == 1:
                 try:
                     data = json.loads(line)
-                except Exception:
-                    e = get_exception()
+                except Exception as e:
                     self.module.fail_json(
                         msg="Cannot load JSON data from the tmp updates file.",
-                        details=e.message)
+                        details=to_native(e))
 
                 break
 
@@ -618,11 +597,10 @@ class JenkinsPlugin(object):
             if not os.path.isdir(updates_dir):
                 try:
                     os.makedirs(updates_dir, int('0700', 8))
-                except OSError:
-                    e = get_exception()
+                except OSError as e:
                     self.module.fail_json(
                         msg="Cannot create temporal directory.",
-                        details=e.message)
+                        details=to_native(e))
 
             self.module.atomic_move(updates_file, updates_file_orig)
 
@@ -653,8 +631,7 @@ class JenkinsPlugin(object):
 
         try:
             os.close(tmp_f_fd)
-        except IOError:
-            e = get_exception()
+        except IOError as e:
             self.module.fail_json(
                 msg='Cannot close the temporal plugin file %s.' % tmp_f,
                 details=to_native(e))
@@ -723,7 +700,7 @@ class JenkinsPlugin(object):
     def _pm_query(self, action, msg):
         url = "%s/pluginManager/plugin/%s/%s" % (
             self.params['url'], self.params['name'], action)
-        data = urllib.urlencode(self.crumb)
+        data = urlencode(self.crumb)
 
         # Send the request
         self._get_url_data(
@@ -768,11 +745,11 @@ def main():
         supports_check_mode=True,
     )
 
-    # Update module parameters by user's parameters if defined
-    if 'params' in module.params and isinstance(module.params['params'], dict):
-        module.params.update(module.params['params'])
-        # Remove the params
-        module.params.pop('params', None)
+    # Params was removed
+    # https://meetbot.fedoraproject.org/ansible-meeting/2017-09-28/ansible_dev_meeting.2017-09-28-15.00.log.html
+    if module.params['params']:
+        module.fail_json(msg="The params option to jenkins_plugin was removed in Ansible 2.5"
+                         "since it circumvents Ansible's option handling")
 
     # Force basic authentication
     module.params['force_basic_auth'] = True
@@ -780,8 +757,7 @@ def main():
     # Convert timeout to float
     try:
         module.params['timeout'] = float(module.params['timeout'])
-    except ValueError:
-        e = get_exception()
+    except ValueError as e:
         module.fail_json(
             msg='Cannot convert %s to float.' % module.params['timeout'],
             details=to_native(e))

@@ -1,23 +1,13 @@
 #!/usr/bin/python
 
 # (c) 2017, NetApp, Inc
-#
-# This file is part of Ansible
-#
-# Ansible is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Ansible is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
-#
-ANSIBLE_METADATA = {'metadata_version': '1.0',
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
+
+
+ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
 
@@ -59,7 +49,7 @@ options:
         required: false
 
     qos:
-        description: Initial quality of service settings for this volume.
+        description: Initial quality of service settings for this volume. Configure as dict in playbooks.
         required: false
         default: None
 
@@ -72,7 +62,7 @@ options:
         description:
         - The ID of the volume to manage or update.
         - In order to create multiple volumes with the same name, but different volume_ids, please declare the I(volume_id)
-          parameter with an arbitary value. However, the specified volume_id will not be assigned to the newly created
+          parameter with an arbitrary value. However, the specified volume_id will not be assigned to the newly created
           volume (since it's an auto-generated property).
         required: false
         default: None
@@ -112,6 +102,7 @@ EXAMPLES = """
        password: "{{ solidfire_password }}"
        state: present
        name: AnsibleVol
+       qos: {minIOPS: 1000, maxIOPS: 20000, burstIOPS: 50000}
        account_id: 3
        enable512e: False
        size: 1
@@ -147,7 +138,7 @@ msg:
 """
 
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.pycompat24 import get_exception
+from ansible.module_utils._text import to_native
 import ansible.module_utils.netapp as netapp_utils
 
 HAS_SF_SDK = netapp_utils.has_sf_sdk()
@@ -166,7 +157,7 @@ class SolidFireVolume(object):
             account_id=dict(required=True, type='int'),
 
             enable512e=dict(type='bool', aliases=['512emulation']),
-            qos=dict(required=False, type='str', default=None),
+            qos=dict(required=False, type='dict', default=None),
             attributes=dict(required=False, type='dict', default=None),
 
             volume_id=dict(type='int', default=None),
@@ -239,19 +230,17 @@ class SolidFireVolume(object):
                                    qos=self.qos,
                                    attributes=self.attributes)
 
-        except:
-            err = get_exception()
+        except Exception as err:
             self.module.fail_json(msg="Error provisioning volume %s of size %s" % (self.name, self.size),
-                                  exception=str(err))
+                                  exception=to_native(err))
 
     def delete_volume(self):
         try:
             self.sfe.delete_volume(volume_id=self.volume_id)
 
-        except:
-            err = get_exception()
+        except Exception as err:
             self.module.fail_json(msg="Error deleting volume %s" % self.volume_id,
-                                  exception=str(err))
+                                  exception=to_native(err))
 
     def update_volume(self):
         try:
@@ -262,10 +251,9 @@ class SolidFireVolume(object):
                                    total_size=self.size,
                                    attributes=self.attributes)
 
-        except:
-            err = get_exception()
+        except Exception as err:
             self.module.fail_json(msg="Error updating volume %s" % self.name,
-                                  exception=str(err))
+                                  exception=to_native(err))
 
     def apply(self):
         changed = False
@@ -298,7 +286,7 @@ class SolidFireVolume(object):
                 elif volume_detail.total_size is not None and volume_detail.total_size != self.size:
                     size_difference = abs(float(volume_detail.total_size - self.size))
                     # Change size only if difference is bigger than 0.001
-                    if size_difference/self.size > 0.001:
+                    if size_difference / self.size > 0.001:
                         update_volume = True
                         changed = True
 
@@ -315,15 +303,14 @@ class SolidFireVolume(object):
         if changed:
             if self.module.check_mode:
                 result_message = "Check mode, skipping changes"
-                pass
             else:
                 if self.state == 'present':
                     if not volume_exists:
                         self.create_volume()
                         result_message = "Volume created"
                     elif update_volume:
-                            self.update_volume()
-                            result_message = "Volume updated"
+                        self.update_volume()
+                        result_message = "Volume updated"
 
                 elif self.state == 'absent':
                     self.delete_volume()
@@ -336,6 +323,6 @@ def main():
     v = SolidFireVolume()
     v.apply()
 
+
 if __name__ == '__main__':
     main()
-
