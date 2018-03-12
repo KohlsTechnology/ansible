@@ -531,8 +531,6 @@ def get_cached_data(cache_dir, project=None, zone=None):
 
 
 def store_cache(data, cache_dir, project=None, zone=None):
-    if not os.path.exists(cache_dir):
-        os.makedirs(cache_dir)
     data_dir = cache_dir
     data_file = os.path.join(data_dir, 'projects.json')
 
@@ -545,7 +543,7 @@ def store_cache(data, cache_dir, project=None, zone=None):
             data_file = os.path.join(data_dir, 'instances.json')
 
     if not os.path.exists(data_dir):
-        os.mkdir(data_dir)
+        os.makedirs(data_dir)
 
     log.info("storing cache '%s'", data_file)
 
