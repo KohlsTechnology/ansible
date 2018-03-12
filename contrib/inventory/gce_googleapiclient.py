@@ -217,6 +217,17 @@ def signal_handler():  # pragma: no cover
     Random.atfork()
 
 
+def is_project_active(project_billing_info):
+    """ Check if the project is billable and active """
+    if not project_billing_info['billingEnabled']:
+        return False
+
+    service = GCAPI.get_service('cloudresourcemanager')
+    request = service.projects().get(projectId=project_billing_info['projectId'])
+    response = request.execute()
+    return response['lifecycleState'] == 'ACTIVE'
+
+
 def get_all_billing_projects(billing_account_name, cache_dir, refresh_cache=True):
     project_ids = []
 
@@ -234,7 +245,7 @@ def get_all_billing_projects(billing_account_name, cache_dir, refresh_cache=True
                                                                      previous_response=response)
 
             for project_billing_info in response['projectBillingInfo']:
-                if project_billing_info['billingEnabled']:
+                if is_project_active(project_billing_info):
                     project_ids.append(project_billing_info['projectId'])
 
         store_cache(data=project_ids, cache_dir=cache_dir)
