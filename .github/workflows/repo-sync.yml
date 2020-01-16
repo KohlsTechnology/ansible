@@ -1,0 +1,16 @@
+on:
+  schedule:
+  - cron:  "*/7 * * * *"
+jobs:
+  repo-sync:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2.0.0
+    - name: repo-sync
+      uses: repo-sync/github-sync@v2
+      with:
+        source_repo: "https://github.com/ansible/ansible.git"
+        source_branch: "*"
+        destination_branch: "*"
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+
